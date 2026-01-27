@@ -1,0 +1,5 @@
+{
+  "name": "직인 관리 시스템",
+  "description": "직인 대장을 작성하고 출력하는 앱",
+  "requestFramePermissions": []
+}

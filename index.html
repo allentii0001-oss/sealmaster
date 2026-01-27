@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>직인 관리 대장</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+      body {
+        font-family: 'Noto Sans KR', sans-serif;
+      }
+      @media print {
+        @page {
+          size: A4 landscape;
+          margin: 10mm;
+        }
+        body {
+          -webkit-print-color-adjust: exact;
+        }
+        .no-print {
+          display: none !important;
+        }
+        .print-only {
+          display: block !important;
+        }
+        .page-break {
+          page-break-after: always;
+        }
+      }
+      .print-only {
+        display: none;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "file-saver": "https://esm.sh/file-saver@^2.0.5",
+    "xlsx": "https://esm.sh/xlsx@^0.18.5",
+    "jszip": "https://esm.sh/jszip@^3.10.1"
+  }
+}
+</script>
+</head>
+  <body class="bg-gray-50 text-slate-800">
+    <div id="root"></div>
+  </body>
+</html>
