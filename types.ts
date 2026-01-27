@@ -30,5 +30,5 @@ export interface FolderSyncConfig {
 
 export const DEFAULT_SYNC_CONFIG: FolderSyncConfig = {
   excelName: '직인관리대장.xlsx',
-  folderName: '다.직인관리대장 스캔',
+  folderName: '직인문서스캔본',
 };

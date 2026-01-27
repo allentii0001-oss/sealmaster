@@ -14,42 +14,48 @@
       /* 
          화면용 스타일: 
          AutoFitText가 작동하려면 DOM에 렌더링되고 공간을 차지해야 합니다.
-         display: none을 쓰면 너비가 0이 되어 작동하지 않습니다.
-         따라서 투명하게 만들고 뒤로 숨깁니다.
       */
       .print-only {
         position: absolute;
         top: 0;
         left: 0;
         width: 297mm; /* A4 Landscape Width */
-        /* 높이는 내용에 따라 달라질 수 있으나, 페이지별로 끊으므로 최소 높이 지정 */
-        min-height: 210mm;
+        min-height: 210mm; /* 화면 미리보기용 최소 높이 */
         opacity: 0;
         pointer-events: none;
         z-index: -9999;
         overflow: hidden;
-        background-color: white; /* 배경색 지정 */
+        background-color: white; 
       }
 
       @media print {
         @page {
           size: A4 landscape;
-          margin: 10mm;
+          margin: 0; /* 브라우저 강제 여백 제거 (2페이지 공백 방지) */
         }
         
-        /* 인쇄 시 모든 배경 흰색, 글자 검정 강제 */
-        body, #root, main, div, section, header, footer, table, tr, td, th {
+        /* 배경 색상 출력 강제 */
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        
+        /* 인쇄 시 배경 흰색 강제 (단, 회색 배경(.bg-gray-100)은 제외하여 헤더 색상 유지) */
+        body, #root, main, div, section, header, footer {
           background-color: white !important;
-          color: black !important;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
         }
 
-        /* 그림자, 테두리 등 불필요한 장식 제거 */
-        .shadow-lg, .shadow-sm, .shadow, .bg-gray-50, .bg-gray-100, .bg-slate-900 {
+        /* 그림자 등 장식 요소 제거 및 배경 정리 */
+        .shadow-lg, .shadow-sm, .shadow, .bg-gray-50, .bg-slate-900 {
           box-shadow: none !important;
           background: white !important;
           background-color: white !important;
+        }
+
+        /* 테이블 헤더의 회색 배경이 인쇄되도록 명시적 설정 */
+        tr.bg-gray-100, 
+        tr.bg-gray-100 th {
+            background-color: #f3f4f6 !important; /* Tailwind gray-100 color */
         }
         
         /* 화면 전용 요소 숨김 */
@@ -57,7 +63,7 @@
           display: none !important;
         }
 
-        /* 인쇄 전용 요소 표시 및 위치 초기화 */
+        /* 인쇄 전용 요소 표시 */
         .print-only {
           position: static !important;
           opacity: 1 !important;
@@ -66,8 +72,10 @@
           overflow: visible !important;
           width: 100% !important;
           height: auto !important;
+          min-height: 0 !important;
           left: auto !important;
           top: auto !important;
+          margin: 0 !important;
         }
         
         /* 페이지 나눔 설정 */

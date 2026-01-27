@@ -163,8 +163,12 @@ const LedgerPrint: React.FC<Props> = ({ data }) => {
       {/* Actual Print Content (Multiple Pages support) */}
       <div className="print-only">
         {printPages.map((pageNum) => (
-          /* For print, we remove padding (p-0) because @page margin handles it */
-          <div key={pageNum} className="w-[297mm] h-[210mm] p-0 relative page-break box-border">
+          /* For print: 
+             - We removed @page margin in CSS to fix the blank page issue.
+             - So we add p-[10mm] here to create the margin inside the container.
+             - overflow-hidden ensures no accidental spillover creates a 2nd page.
+          */
+          <div key={pageNum} className="w-[297mm] h-[210mm] p-[10mm] relative page-break box-border overflow-hidden">
              <PageContent data={getPageData(pageNum)} totalPages={totalPages} />
           </div>
         ))}
