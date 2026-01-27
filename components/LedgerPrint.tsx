@@ -154,6 +154,7 @@ const LedgerPrint: React.FC<Props> = ({ data }) => {
 
       {/* Screen Preview (Single Page) */}
       <div className="no-print flex-1 overflow-auto bg-gray-500 p-8 flex justify-center">
+        {/* On screen, we keep padding to simulate A4 margin */}
         <div className="bg-white shadow-lg w-[297mm] min-h-[210mm] p-[10mm] relative box-border origin-top scale-90 md:scale-100">
            <PageContent data={getPageData(currentPage)} pageNum={currentPage} totalPages={totalPages} />
         </div>
@@ -162,7 +163,8 @@ const LedgerPrint: React.FC<Props> = ({ data }) => {
       {/* Actual Print Content (Multiple Pages support) */}
       <div className="print-only">
         {printPages.map((pageNum) => (
-          <div key={pageNum} className="w-[297mm] h-[210mm] p-[10mm] relative page-break box-border">
+          /* For print, we remove padding (p-0) because @page margin handles it */
+          <div key={pageNum} className="w-[297mm] h-[210mm] p-0 relative page-break box-border">
              <PageContent data={getPageData(pageNum)} pageNum={pageNum} totalPages={totalPages} />
           </div>
         ))}
@@ -182,14 +184,14 @@ const PageContent: React.FC<{ data: LedgerEntry[], pageNum: number, totalPages: 
     return (
         <div className="h-full flex flex-col">
             {/* Header Title */}
-            <div className="text-center mb-6">
+            <div className="text-center mb-2">
                 <h1 className="text-3xl font-serif font-bold underline underline-offset-8">직 인 관 리 대 장</h1>
             </div>
 
             {/* Table */}
             <table className="w-full border-collapse border border-black text-sm text-center table-fixed">
                 <thead>
-                    <tr className="bg-gray-100 h-10">
+                    <tr className="bg-gray-100 h-8">
                         {/* Data Columns with RowSpan 2 */}
                         <th scope="col" rowSpan={2} className="border border-black w-10">연번</th>
                         <th scope="col" rowSpan={2} className="border border-black w-24">일자</th>
@@ -202,7 +204,7 @@ const PageContent: React.FC<{ data: LedgerEntry[], pageNum: number, totalPages: 
                         {/* Signature Block Header */}
                         <th scope="colgroup" colSpan={3} className="border border-black w-48 h-8">결 재</th>
                     </tr>
-                    <tr className="bg-gray-100 h-10">
+                    <tr className="bg-gray-100 h-8">
                         {/* Signature Sub-columns */}
                         <th scope="col" className="border border-black w-16">팀 장</th>
                         <th scope="col" className="border border-black w-16">국 장</th>
