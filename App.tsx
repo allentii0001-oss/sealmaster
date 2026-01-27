@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Book, Printer } from 'lucide-react';
 import LedgerManagement from './components/LedgerManagement';
 import LedgerPrint from './components/LedgerPrint';
-import { LedgerEntry, Tab } from './types';
+import { LedgerEntry, Tab, FolderSyncConfig, DEFAULT_SYNC_CONFIG } from './types';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.MANAGEMENT);
@@ -12,6 +12,10 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('sealLedgerData');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Folder Sync State (Lifted up to persist across tabs)
+  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [syncConfig, setSyncConfig] = useState<FolderSyncConfig>(DEFAULT_SYNC_CONFIG);
 
   // Save to localStorage whenever data changes
   useEffect(() => {
@@ -59,7 +63,14 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
         {activeTab === Tab.MANAGEMENT ? (
-          <LedgerManagement data={data} setData={setData} />
+          <LedgerManagement 
+            data={data} 
+            setData={setData} 
+            dirHandle={dirHandle}
+            setDirHandle={setDirHandle}
+            syncConfig={syncConfig}
+            setSyncConfig={setSyncConfig}
+          />
         ) : (
           <LedgerPrint data={data} />
         )}

@@ -1,14 +1,26 @@
 import React, { useState, useRef, ChangeEvent } from 'react';
 import { Upload, FileText, Search, Save, Download, Edit2, Check, X, FileSpreadsheet, AlertCircle, CheckCircle2, Trash2, RefreshCw, FolderOpen, Settings, FolderInput, FolderOutput } from 'lucide-react';
-import { LedgerEntry, SearchCriteria, FolderSyncConfig, DEFAULT_SYNC_CONFIG } from '../types';
+import { LedgerEntry, SearchCriteria, FolderSyncConfig } from '../types';
 import { fileToBase64, exportDataToZip, importExcelData, connectToDirectory, syncLoadFromDirectory, syncSaveToDirectory } from '../services/fileService';
 
 interface Props {
   data: LedgerEntry[];
   setData: React.Dispatch<React.SetStateAction<LedgerEntry[]>>;
+  // Props for lifted state
+  dirHandle: FileSystemDirectoryHandle | null;
+  setDirHandle: React.Dispatch<React.SetStateAction<FileSystemDirectoryHandle | null>>;
+  syncConfig: FolderSyncConfig;
+  setSyncConfig: React.Dispatch<React.SetStateAction<FolderSyncConfig>>;
 }
 
-const LedgerManagement: React.FC<Props> = ({ data, setData }) => {
+const LedgerManagement: React.FC<Props> = ({ 
+  data, 
+  setData,
+  dirHandle,
+  setDirHandle,
+  syncConfig,
+  setSyncConfig
+}) => {
   // Form State
   const [formData, setFormData] = useState<Omit<LedgerEntry, 'id'>>({
     date: new Date().toISOString().split('T')[0],
@@ -32,9 +44,7 @@ const LedgerManagement: React.FC<Props> = ({ data, setData }) => {
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Folder Sync State
-  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [syncConfig, setSyncConfig] = useState<FolderSyncConfig>(DEFAULT_SYNC_CONFIG);
+  // Note: dirHandle and syncConfig are now passed via props
   const [showConfigModal, setShowConfigModal] = useState(false);
   
   // Import Modal State (Manual File)
