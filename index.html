@@ -10,6 +10,21 @@
       body {
         font-family: 'Noto Sans KR', sans-serif;
       }
+      
+      /* 기본 상태: 출력용 요소는 화면 밖으로 보내서 숨김 (display: none 아님) 
+         이렇게 해야 AutoFitText가 너비를 계산할 수 있습니다. */
+      .print-only {
+        position: fixed;
+        left: -5000px;
+        top: 0;
+        width: 297mm;
+        height: 210mm;
+        opacity: 0;
+        pointer-events: none;
+        z-index: -100;
+        overflow: hidden;
+      }
+
       @media print {
         @page {
           size: A4 landscape;
@@ -28,15 +43,20 @@
         .no-print {
           display: none !important;
         }
+        /* 출력 시에는 원래 위치로 복귀 */
         .print-only {
+          position: static;
+          left: auto;
+          top: auto;
+          width: auto;
+          height: auto;
+          opacity: 1;
           display: block !important;
+          overflow: visible;
         }
         .page-break {
           page-break-after: always;
         }
-      }
-      .print-only {
-        display: none;
       }
     </style>
   <script type="importmap">

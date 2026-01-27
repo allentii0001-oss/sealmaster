@@ -241,11 +241,6 @@ const PageContent: React.FC<{ data: LedgerEntry[], pageNum: number, totalPages: 
                     ))}
                 </tbody>
             </table>
-
-            {/* Footer */}
-            <div className="mt-auto text-center text-sm font-medium">
-                - {pageNum} -
-            </div>
         </div>
     );
 };
