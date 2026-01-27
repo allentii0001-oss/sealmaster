@@ -156,7 +156,7 @@ const LedgerPrint: React.FC<Props> = ({ data }) => {
       <div className="no-print flex-1 overflow-auto bg-gray-500 p-8 flex justify-center">
         {/* On screen, we keep padding to simulate A4 margin */}
         <div className="bg-white shadow-lg w-[297mm] min-h-[210mm] p-[10mm] relative box-border origin-top scale-90 md:scale-100">
-           <PageContent data={getPageData(currentPage)} pageNum={currentPage} totalPages={totalPages} />
+           <PageContent data={getPageData(currentPage)} totalPages={totalPages} />
         </div>
       </div>
 
@@ -165,7 +165,7 @@ const LedgerPrint: React.FC<Props> = ({ data }) => {
         {printPages.map((pageNum) => (
           /* For print, we remove padding (p-0) because @page margin handles it */
           <div key={pageNum} className="w-[297mm] h-[210mm] p-0 relative page-break box-border">
-             <PageContent data={getPageData(pageNum)} pageNum={pageNum} totalPages={totalPages} />
+             <PageContent data={getPageData(pageNum)} totalPages={totalPages} />
           </div>
         ))}
       </div>
@@ -174,7 +174,7 @@ const LedgerPrint: React.FC<Props> = ({ data }) => {
 };
 
 // The content of a single A4 page
-const PageContent: React.FC<{ data: LedgerEntry[], pageNum: number, totalPages: number }> = ({ data, pageNum, totalPages }) => {
+const PageContent: React.FC<{ data: LedgerEntry[], totalPages: number }> = ({ data, totalPages }) => {
     // Ensure we always render 20 rows to keep layout consistent
     const rows = [...data];
     while (rows.length < ITEMS_PER_PAGE) {
