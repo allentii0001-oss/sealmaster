@@ -213,7 +213,7 @@ const PageContent: React.FC<{ data: LedgerEntry[], pageNum: number, totalPages: 
                 </thead>
                 <tbody>
                     {rows.map((row, index) => (
-                        <tr key={index} className="h-8">
+                        <tr key={index} className="h-7">
                             <td className="border border-black px-1">
                                 {row.id > 0 ? row.id : ''}
                             </td>

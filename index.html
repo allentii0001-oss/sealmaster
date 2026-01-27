@@ -15,9 +15,15 @@
           size: A4 landscape;
           margin: 10mm;
         }
-        body {
-          -webkit-print-color-adjust: exact;
+        /* 모든 요소의 배경을 강제로 흰색으로 변경하여 회색 음영 제거 */
+        body, #root, main, div, section, header, footer {
           background-color: white !important;
+          color: black !important;
+          -webkit-print-color-adjust: exact;
+        }
+        /* 그림자 등 장식 요소 제거 */
+        .shadow-lg, .shadow-sm, .shadow {
+          box-shadow: none !important;
         }
         .no-print {
           display: none !important;
