@@ -186,10 +186,10 @@ const PageContent: React.FC<{ data: LedgerEntry[], totalPages: number }> = ({ da
     }
 
     return (
-        <div className="h-full flex flex-col">
+        <div className="h-full flex flex-col font-hancom">
             {/* Header Title */}
-            <div className="text-center mb-2">
-                <h1 className="text-3xl font-serif font-bold underline underline-offset-8">직 인 관 리 대 장</h1>
+            <div className="text-center mb-6">
+                <h1 className="text-3xl font-bold underline underline-offset-8">직 인 관 리 대 장</h1>
             </div>
 
             {/* Table */}
