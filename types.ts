@@ -24,11 +24,43 @@ export interface SearchCriteria {
 }
 
 export interface FolderSyncConfig {
-  excelName: string;
-  folderName: string;
+  dbFileName: string; // Merged JSON file (Data + Log + Lock)
+  folderName: string; // PDF storage folder
+  backupExcelName: string; // For human readability/backup
 }
 
 export const DEFAULT_SYNC_CONFIG: FolderSyncConfig = {
-  excelName: '직인관리대장.xlsx',
+  dbFileName: '직인 관리 대장.json',
   folderName: '직인문서스캔본',
+  backupExcelName: '직인관리대장_백업.xlsx',
+};
+
+// --- New Types for Locking & Logging ---
+
+export type LockStatus = 'LOCKED' | 'UNLOCKED';
+
+export interface LockState {
+  status: LockStatus;
+  activeUser: string | null;
+  startTime: string | null; // ISO Date String
+}
+
+export interface LogEntry {
+  timestamp: string;
+  userName: string;
+  action: 'CONNECT' | 'DISCONNECT_SAVE' | 'FORCE_UNLOCK';
+  details?: string;
+}
+
+// The single file structure
+export interface CombinedDatabase {
+  lock: LockState;
+  logs: LogEntry[];
+  entries: Omit<LedgerEntry, 'fileData'>[]; // Metadata only in JSON to keep it small
+}
+
+export const INITIAL_DB: CombinedDatabase = {
+  lock: { status: 'UNLOCKED', activeUser: null, startTime: null },
+  logs: [],
+  entries: [],
 };

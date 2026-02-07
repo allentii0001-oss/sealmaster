@@ -1,16 +1,16 @@
 import React, { useState, useRef, ChangeEvent } from 'react';
-import { Upload, FileText, Search, Save, Download, Edit2, Check, X, FileSpreadsheet, AlertCircle, CheckCircle2, Trash2, RefreshCw, FolderOpen, Settings, FolderInput, FolderOutput } from 'lucide-react';
-import { LedgerEntry, SearchCriteria, FolderSyncConfig } from '../types';
-import { fileToBase64, exportDataToZip, importExcelData, connectToDirectory, syncLoadFromDirectory, syncSaveToDirectory } from '../services/fileService';
+import { Upload, FileText, Search, Save, Download, Edit2, Check, X, FileSpreadsheet, AlertCircle, CheckCircle2, Trash2, RefreshCw, FolderOpen, Settings, FolderInput, FolderOutput, Lock, Unlock, Archive } from 'lucide-react';
+import { LedgerEntry, SearchCriteria, FolderSyncConfig, LockState } from '../types';
+import { fileToBase64, exportDataToZip, backupFullDataToZip, importExcelData, connectToDirectory, connectAndLock, saveAndUnlock, forceUnlock, LockedError } from '../services/fileService';
 
 interface Props {
   data: LedgerEntry[];
   setData: React.Dispatch<React.SetStateAction<LedgerEntry[]>>;
-  // Props for lifted state
   dirHandle: FileSystemDirectoryHandle | null;
   setDirHandle: React.Dispatch<React.SetStateAction<FileSystemDirectoryHandle | null>>;
   syncConfig: FolderSyncConfig;
   setSyncConfig: React.Dispatch<React.SetStateAction<FolderSyncConfig>>;
+  userName: string; // Passed from App
 }
 
 const LedgerManagement: React.FC<Props> = ({ 
@@ -19,7 +19,8 @@ const LedgerManagement: React.FC<Props> = ({
   dirHandle,
   setDirHandle,
   syncConfig,
-  setSyncConfig
+  setSyncConfig,
+  userName
 }) => {
   // Form State
   const [formData, setFormData] = useState<Omit<LedgerEntry, 'id'>>({
@@ -44,59 +45,93 @@ const LedgerManagement: React.FC<Props> = ({
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Note: dirHandle and syncConfig are now passed via props
+  // Modals
   const [showConfigModal, setShowConfigModal] = useState(false);
-  
-  // Import Modal State (Manual File)
   const [showImportModal, setShowImportModal] = useState(false);
   const [pendingData, setPendingData] = useState<LedgerEntry[]>([]);
+
+  // Lock Error Modal
+  const [lockedError, setLockedError] = useState<{ handle: FileSystemDirectoryHandle, info: LockState } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Handlers: Folder Sync ---
+  // --- Handlers: Folder Sync (Connect & Lock) ---
 
   const handleConnectFolder = async () => {
+    if (!userName) {
+        alert("사용자 이름이 확인되지 않았습니다. 새로고침 후 다시 시도해주세요.");
+        return;
+    }
+    
     try {
         const handle = await connectToDirectory();
-        setDirHandle(handle);
-        setImportStatus({ type: 'success', message: `폴더 연결 성공: ${handle.name}` });
-    } catch (error: any) {
-        if (error.name !== 'AbortError') { // Ignore if user cancels
-            alert(`폴더 연결 실패: ${error.message}`);
+        
+        // Attempt to Lock and Load
+        setIsLoading(true);
+        try {
+            const entries = await connectAndLock(handle, syncConfig, userName);
+            setDirHandle(handle);
+            setData(entries);
+            setImportStatus({ type: 'success', message: `연결 성공: ${handle.name} (편집 가능)` });
+        } catch (err: any) {
+            if (err instanceof LockedError) {
+                // Show Lock Modal
+                setLockedError({ handle, info: err.lockInfo });
+            } else {
+                throw err;
+            }
         }
-    }
-  };
-
-  const handleSyncLoad = async () => {
-    if (!dirHandle) return;
-    if (!window.confirm('폴더의 엑셀 파일에서 데이터를 불러오시겠습니까?\n현재 입력된 데이터는 덮어씌워집니다.')) return;
-
-    setIsLoading(true);
-    try {
-        const entries = await syncLoadFromDirectory(dirHandle, syncConfig);
-        setData(entries);
-        setImportStatus({ type: 'success', message: `폴더에서 ${entries.length}건을 불러왔습니다.` });
     } catch (error: any) {
-        setImportStatus({ type: 'error', message: `불러오기 실패: ${error.message}` });
-        alert(`데이터를 불러오지 못했습니다.\n\n${error.message}`);
+        if (error.name !== 'AbortError') {
+            alert(`연결 오류: ${error.message}`);
+        }
     } finally {
         setIsLoading(false);
     }
   };
 
-  const handleSyncSave = async () => {
+  const handleForceUnlock = async () => {
+      if (!lockedError) return;
+      if (!window.confirm("강제 종료 하시겠습니까?\n이전 사용자의 작업 내용이 저장되지 않았을 수 있습니다.")) return;
+
+      setIsLoading(true);
+      try {
+          // 1. Force Unlock
+          await forceUnlock(lockedError.handle, syncConfig, userName);
+          
+          // 2. Retry Connect & Lock
+          const entries = await connectAndLock(lockedError.handle, syncConfig, userName);
+          
+          setDirHandle(lockedError.handle);
+          setData(entries);
+          setImportStatus({ type: 'success', message: `강제 종료 후 연결 성공` });
+          setLockedError(null); // Close modal
+      } catch (error: any) {
+          alert(`강제 종료 실패: ${error.message}`);
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  const handleSyncSaveAndExit = async () => {
     if (!dirHandle) return;
     if (data.length === 0) {
         alert('저장할 데이터가 없습니다.');
         return;
     }
-    if (!window.confirm(`'${syncConfig.excelName}' 파일과 PDF 파일들을 저장하시겠습니까?\n경고: 폴더 내 대장과 일치하지 않는 PDF 파일은 삭제됩니다.`)) return;
+    if (!window.confirm(`데이터를 저장하고 접속을 종료하시겠습니까?\n'${syncConfig.dbFileName}' 및 PDF 파일들이 업데이트됩니다.`)) return;
 
     setIsLoading(true);
     try {
-        await syncSaveToDirectory(dirHandle, data, syncConfig);
-        setImportStatus({ type: 'success', message: '폴더에 모든 데이터를 저장했습니다.' });
+        await saveAndUnlock(dirHandle, data, syncConfig, userName);
+        
+        // Success -> Reset State (Simulate Disconnect)
+        alert('성공적으로 저장되었으며, 다른 사용자가 이용할 수 있도록 접속이 종료되었습니다.');
+        setDirHandle(null);
+        setData([]); // Clear data for security
+        setImportStatus(null);
+
     } catch (error: any) {
         setImportStatus({ type: 'error', message: `저장 실패: ${error.message}` });
         alert(`저장 중 오류가 발생했습니다.\n\n${error.message}`);
@@ -198,6 +233,14 @@ const LedgerManagement: React.FC<Props> = ({
     }
     exportDataToZip(data);
   };
+  
+  const handleFullBackup = () => {
+      if (data.length === 0) {
+          alert('백업할 데이터가 없습니다.');
+          return;
+      }
+      backupFullDataToZip(data);
+  };
 
   const handleCellEdit = (id: number, field: keyof LedgerEntry, value: string) => {
     setData((prev) =>
@@ -278,37 +321,82 @@ const LedgerManagement: React.FC<Props> = ({
           </div>
       )}
 
+      {/* Lock Error Modal (Collision Detection) */}
+      {lockedError && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[70] p-4">
+              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 text-center border-t-4 border-red-500">
+                  <div className="flex justify-center mb-4 text-red-500">
+                      <Lock size={48} />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">접속 제한 (잠김)</h3>
+                  <div className="bg-red-50 rounded-lg p-4 mb-6 text-left">
+                      <p className="font-semibold text-red-800 mb-1">현재 다른 사용자가 접속 중입니다.</p>
+                      <ul className="text-sm text-red-700 space-y-1">
+                          <li>• 사용자: <span className="font-bold">{lockedError.info.activeUser}</span></li>
+                          <li>• 접속시간: {new Date(lockedError.info.startTime || '').toLocaleString()}</li>
+                      </ul>
+                  </div>
+                  <p className="text-gray-600 text-sm mb-6">
+                      해당 사용자가 저장을 완료할 때까지 기다리거나,<br/>
+                      문제가 있는 경우 <strong>강제 종료</strong>하여 접속할 수 있습니다.
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                      <button 
+                          onClick={() => setLockedError(null)}
+                          className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                          취소
+                      </button>
+                      <button 
+                          onClick={handleForceUnlock}
+                          className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 font-bold shadow-md"
+                      >
+                          <Unlock size={18} />
+                          강제 접속 종료
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Configuration Modal */}
       {showConfigModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="modal-title">
               <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
                   <div className="flex items-center gap-3 mb-6 border-b pb-4">
                       <Settings className="text-gray-700" size={24} aria-hidden="true" />
-                      <h3 id="modal-title" className="text-xl font-bold">폴더 동기화 설정</h3>
+                      <h3 id="modal-title" className="text-xl font-bold">동기화 파일 설정</h3>
                   </div>
                   
                   <div className="space-y-4 mb-6">
                       <div>
-                          <label htmlFor="configExcelName" className="block text-sm font-medium text-gray-700 mb-1">엑셀 파일명 (확장자 포함)</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">DB 파일명 (JSON)</label>
                           <input 
-                              id="configExcelName"
                               type="text" 
-                              value={syncConfig.excelName}
-                              onChange={(e) => setSyncConfig(p => ({ ...p, excelName: e.target.value }))}
-                              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                              value={syncConfig.dbFileName}
+                              onChange={(e) => setSyncConfig(p => ({ ...p, dbFileName: e.target.value }))}
+                              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+                              readOnly
                           />
-                          <p className="text-xs text-gray-500 mt-1">예: 직인관리대장.xlsx</p>
+                          <p className="text-xs text-gray-500 mt-1">데이터와 로그가 통합된 파일입니다.</p>
                       </div>
                       <div>
-                          <label htmlFor="configFolderName" className="block text-sm font-medium text-gray-700 mb-1">첨부파일 저장 폴더명</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">백업 엑셀 파일명</label>
                           <input 
-                              id="configFolderName"
+                              type="text" 
+                              value={syncConfig.backupExcelName}
+                              onChange={(e) => setSyncConfig(p => ({ ...p, backupExcelName: e.target.value }))}
+                              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">첨부파일 폴더명</label>
+                          <input 
                               type="text" 
                               value={syncConfig.folderName}
                               onChange={(e) => setSyncConfig(p => ({ ...p, folderName: e.target.value }))}
                               className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
                           />
-                          <p className="text-xs text-gray-500 mt-1">이 폴더 내에 PDF 파일들이 '일자_내용_수신처_작성자.pdf' 형식으로 저장됩니다.</p>
                       </div>
                   </div>
 
@@ -367,20 +455,19 @@ const LedgerManagement: React.FC<Props> = ({
                {!dirHandle ? (
                    <button
                        onClick={handleConnectFolder}
-                       className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+                       className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors font-medium shadow-sm"
                    >
                        <FolderOpen size={18} aria-hidden="true" />
-                       폴더 연결 (탐색기)
+                       폴더 연결 및 시작
                    </button>
                ) : (
-                   <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1 rounded border border-indigo-200">
-                       <FolderOpen size={16} className="text-indigo-600" aria-hidden="true"/>
-                       <span className="text-sm font-medium text-indigo-900 truncate max-w-[150px]">연결됨: {dirHandle.name}</span>
+                   <div className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded border border-green-200">
+                       <CheckCircle2 size={16} className="text-green-600" aria-hidden="true"/>
+                       <span className="text-sm font-bold text-green-900 truncate max-w-[150px]">연결됨: {dirHandle.name}</span>
                        <button 
                            onClick={() => setShowConfigModal(true)}
-                           className="p-1 hover:bg-indigo-200 rounded text-indigo-700 ml-1"
-                           title="동기화 설정"
-                           aria-label="폴더 동기화 설정"
+                           className="p-1 hover:bg-green-200 rounded text-green-700 ml-1"
+                           title="설정"
                        >
                            <Settings size={16} />
                        </button>
@@ -389,30 +476,20 @@ const LedgerManagement: React.FC<Props> = ({
 
                {/* Sync Buttons (Visible only when connected) */}
                {dirHandle && (
-                   <>
-                       <button
-                           onClick={handleSyncLoad}
-                           className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-sm"
-                           title="폴더의 엑셀 파일에서 불러오기"
-                       >
-                           <FolderInput size={16} aria-hidden="true" />
-                           폴더에서 불러오기
-                       </button>
-                       <button
-                           onClick={handleSyncSave}
-                           className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-sm"
-                           title="폴더에 저장하기"
-                       >
-                           <FolderOutput size={16} aria-hidden="true" />
-                           폴더에 저장하기
-                       </button>
-                   </>
+                   <button
+                       onClick={handleSyncSaveAndExit}
+                       className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 transition-colors text-sm font-bold shadow-sm animate-pulse"
+                       title="저장 후 접속을 종료합니다"
+                   >
+                       <FolderOutput size={18} aria-hidden="true" />
+                       저장 및 접속 종료
+                   </button>
                )}
            </div>
 
            {/* Row 2: Manual Fallback (Always visible but visually secondary) */}
            <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-gray-400 text-xs hidden md:inline">수동 파일:</span>
+                <span className="text-gray-400 text-xs hidden md:inline">개인 PC 파일:</span>
                 <label htmlFor="manual-import-file" className="sr-only">엑셀 또는 zip 파일 불러오기</label>
                 <input
                     id="manual-import-file"
@@ -427,14 +504,23 @@ const LedgerManagement: React.FC<Props> = ({
                     className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
                 >
                     <FileSpreadsheet size={14} aria-hidden="true" />
-                    파일 열기
+                    열기
                 </button>
                 <button
                     onClick={handleExcelExport}
                     className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
                 >
                     <Download size={14} aria-hidden="true" />
-                    PC에 저장
+                    엑셀 저장
+                </button>
+                <div className="w-px h-4 bg-gray-300 mx-1"></div>
+                <button
+                    onClick={handleFullBackup}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                    title="현재 데이터와 모든 PDF를 압축하여 다운로드합니다"
+                >
+                    <Archive size={14} aria-hidden="true" />
+                    PDF 통째로 백업
                 </button>
            </div>
            
@@ -507,8 +593,12 @@ const LedgerManagement: React.FC<Props> = ({
       </div>
 
       {/* Input Form */}
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h3 className="text-lg font-bold mb-4 text-gray-800">새로운 항목 입력</h3>
+      <form onSubmit={handleSubmit} className={`bg-white p-6 rounded-lg shadow-sm border border-gray-200 ${dirHandle ? '' : 'opacity-70 pointer-events-none'}`}>
+        <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-gray-800">새로운 항목 입력</h3>
+            {!dirHandle && <span className="text-red-500 text-sm font-bold animate-pulse">※ 폴더 연결 후 입력 가능</span>}
+        </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
           <div className="col-span-1">
             <label htmlFor="form-date" className="block text-sm font-medium text-gray-700 mb-1">일자 <span className="text-red-500">*</span></label>

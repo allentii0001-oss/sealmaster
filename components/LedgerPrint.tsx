@@ -195,7 +195,7 @@ const PageContent: React.FC<{ data: LedgerEntry[], totalPages: number }> = ({ da
             {/* Table */}
             <table className="w-full border-collapse border border-black text-sm text-center table-fixed">
                 <thead>
-                    <tr className="bg-gray-100 h-8">
+                    <tr className="bg-gray-100 h-6">
                         {/* Data Columns with RowSpan 2 */}
                         <th scope="col" rowSpan={2} className="border border-black w-10">연번</th>
                         <th scope="col" rowSpan={2} className="border border-black w-24">일자</th>
@@ -206,9 +206,9 @@ const PageContent: React.FC<{ data: LedgerEntry[], totalPages: number }> = ({ da
                         <th scope="col" rowSpan={2} className="border border-black w-20">작성자</th>
                         
                         {/* Signature Block Header */}
-                        <th scope="colgroup" colSpan={3} className="border border-black w-48 h-8">결 재</th>
+                        <th scope="colgroup" colSpan={3} className="border border-black w-48 h-6">결 재</th>
                     </tr>
-                    <tr className="bg-gray-100 h-8">
+                    <tr className="bg-gray-100 h-6">
                         {/* Signature Sub-columns */}
                         <th scope="col" className="border border-black w-16">팀 장</th>
                         <th scope="col" className="border border-black w-16">국 장</th>
