@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import saveAs from 'file-saver';
-import { LedgerEntry, FolderSyncConfig, CombinedDatabase, INITIAL_DB, LockState } from '../types';
+import { LedgerEntry, FolderSyncConfig, CombinedDatabase, INITIAL_DB, LockState, LogSession, LogEntry } from '../types';
 
 // Safe XLSX accessor
 const getXLSX = () => (XLSX as any).default || XLSX;
@@ -15,6 +15,9 @@ export class LockedError extends Error {
         this.lockInfo = lockInfo;
     }
 }
+
+// Log Limit Constant
+const MAX_LOG_ENTRIES = 200;
 
 // --- Helper Functions ---
 
@@ -52,6 +55,30 @@ const generateEntryFileName = (entry: Omit<LedgerEntry, 'fileData'>): string => 
     return `${dateStr}_${contentStr}_${recipientStr}_${authorStr}.pdf`;
 };
 
+// --- DB Access Helper ---
+async function readDb(dirHandle: FileSystemDirectoryHandle, config: FolderSyncConfig): Promise<CombinedDatabase> {
+    try {
+        const dbHandle = await dirHandle.getFileHandle(config.dbFileName, { create: true });
+        const file = await dbHandle.getFile();
+        const text = await file.text();
+        if (!text.trim()) return JSON.parse(JSON.stringify(INITIAL_DB));
+        
+        const db = JSON.parse(text);
+        // Ensure password exists for legacy files
+        if (!db.password) db.password = "2888";
+        return db;
+    } catch (e) {
+        return JSON.parse(JSON.stringify(INITIAL_DB));
+    }
+}
+
+async function writeDb(dirHandle: FileSystemDirectoryHandle, config: FolderSyncConfig, db: CombinedDatabase) {
+    const dbHandle = await dirHandle.getFileHandle(config.dbFileName, { create: true });
+    const writable = await dbHandle.createWritable();
+    await writable.write(JSON.stringify(db, null, 2));
+    await writable.close();
+}
+
 // --- Folder Sync Logic ---
 
 export const connectToDirectory = async () => {
@@ -59,27 +86,14 @@ export const connectToDirectory = async () => {
 };
 
 export const connectAndLock = async (dirHandle: FileSystemDirectoryHandle, config: FolderSyncConfig, userName: string) => {
-    // 1. Get or Create JSON DB File
-    let dbHandle: FileSystemFileHandle;
-    let db: CombinedDatabase = JSON.parse(JSON.stringify(INITIAL_DB));
-
-    try {
-        dbHandle = await dirHandle.getFileHandle(config.dbFileName, { create: true });
-        const file = await dbHandle.getFile();
-        const text = await file.text();
-        if (text.trim()) {
-            db = JSON.parse(text);
-        }
-    } catch (e) {
-        dbHandle = await dirHandle.getFileHandle(config.dbFileName, { create: true });
-    }
+    let db = await readDb(dirHandle, config);
 
     // 2. Check Lock
     if (db.lock.status === 'LOCKED') {
         throw new LockedError(db.lock);
     }
 
-    // 3. Lock it
+    // 3. Lock it & Add Log
     db.lock = {
         status: 'LOCKED',
         activeUser: userName,
@@ -91,9 +105,12 @@ export const connectAndLock = async (dirHandle: FileSystemDirectoryHandle, confi
         action: 'CONNECT'
     });
     
-    const writable = await dbHandle.createWritable();
-    await writable.write(JSON.stringify(db, null, 2));
-    await writable.close();
+    // Limit logs
+    if (db.logs.length > MAX_LOG_ENTRIES) {
+        db.logs = db.logs.slice(-MAX_LOG_ENTRIES);
+    }
+
+    await writeDb(dirHandle, config, db);
 
     // 4. Load Entries & Files
     const loadedEntries: LedgerEntry[] = [];
@@ -136,10 +153,26 @@ export const saveAndUnlock = async (dirHandle: FileSystemDirectoryHandle, data: 
             const genName = generateEntryFileName(item); 
             finalFileName = genName; 
             
-            const fileHandle = await folderHandle.getFileHandle(finalFileName, { create: true });
-            const writable = await fileHandle.createWritable();
-            await writable.write(base64ToBlob(item.fileData));
-            await writable.close();
+            const blob = base64ToBlob(item.fileData);
+            let shouldWrite = true;
+
+            // Optimization: Check if file exists and has same size
+            try {
+                const existingHandle = await folderHandle.getFileHandle(finalFileName);
+                const existingFile = await existingHandle.getFile();
+                if (existingFile.size === blob.size) {
+                    shouldWrite = false;
+                }
+            } catch (e) {
+                shouldWrite = true;
+            }
+
+            if (shouldWrite) {
+                const fileHandle = await folderHandle.getFileHandle(finalFileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+            }
         }
 
         if (finalFileName) validFileNames.add(finalFileName);
@@ -155,7 +188,7 @@ export const saveAndUnlock = async (dirHandle: FileSystemDirectoryHandle, data: 
         });
     }
 
-    // 2. Cleanup Orphans (Keep this per user request)
+    // 2. Cleanup Orphans
     for await (const [name, handle] of folderHandle.entries()) {
         if (handle.kind === 'file' && !validFileNames.has(name)) {
             await folderHandle.removeEntry(name);
@@ -163,38 +196,125 @@ export const saveAndUnlock = async (dirHandle: FileSystemDirectoryHandle, data: 
     }
 
     // 3. Update DB & Unlock
-    const dbHandle = await dirHandle.getFileHandle(config.dbFileName, { create: true });
-    const file = await dbHandle.getFile();
-    const text = await file.text();
-    let oldDb: CombinedDatabase = JSON.parse(text || JSON.stringify(INITIAL_DB));
+    let db = await readDb(dirHandle, config);
 
+    // Update Logs
+    let updatedLogs = [
+        ...db.logs, 
+        { timestamp: new Date().toISOString(), userName, action: 'DISCONNECT_SAVE' } as any
+    ];
+
+    if (updatedLogs.length > MAX_LOG_ENTRIES) {
+        updatedLogs = updatedLogs.slice(-MAX_LOG_ENTRIES);
+    }
+
+    // Preserve password, update everything else
     const newDb: CombinedDatabase = {
+        password: db.password || "2888", 
         lock: { status: 'UNLOCKED', activeUser: null, startTime: null },
-        logs: [
-            ...oldDb.logs, 
-            { timestamp: new Date().toISOString(), userName, action: 'DISCONNECT_SAVE' }
-        ],
+        logs: updatedLogs,
         entries: cleanEntries
     };
 
-    const writable = await dbHandle.createWritable();
-    await writable.write(JSON.stringify(newDb, null, 2));
-    await writable.close();
+    await writeDb(dirHandle, config, newDb);
 };
 
 export const forceUnlock = async (dirHandle: FileSystemDirectoryHandle, config: FolderSyncConfig, userName: string) => {
-     const dbHandle = await dirHandle.getFileHandle(config.dbFileName, { create: true });
-     const file = await dbHandle.getFile();
-     const text = await file.text();
-     let db: CombinedDatabase = JSON.parse(text || JSON.stringify(INITIAL_DB));
+     let db = await readDb(dirHandle, config);
      
      db.lock = { status: 'UNLOCKED', activeUser: null, startTime: null };
      db.logs.push({ timestamp: new Date().toISOString(), userName, action: 'FORCE_UNLOCK' });
+
+     if (db.logs.length > MAX_LOG_ENTRIES) {
+        db.logs = db.logs.slice(-MAX_LOG_ENTRIES);
+     }
      
-     const writable = await dbHandle.createWritable();
-     await writable.write(JSON.stringify(db, null, 2));
-     await writable.close();
+     await writeDb(dirHandle, config, db);
 };
+
+// --- Password & Log Management ---
+
+export const checkPassword = async (dirHandle: FileSystemDirectoryHandle, config: FolderSyncConfig, inputPw: string): Promise<boolean> => {
+    const db = await readDb(dirHandle, config);
+    return (db.password || "2888") === inputPw;
+};
+
+export const changePassword = async (dirHandle: FileSystemDirectoryHandle, config: FolderSyncConfig, oldPw: string, newPw: string): Promise<boolean> => {
+    let db = await readDb(dirHandle, config);
+    const currentPw = db.password || "2888";
+    
+    if (currentPw !== oldPw) {
+        return false;
+    }
+    
+    db.password = newPw;
+    await writeDb(dirHandle, config, db);
+    return true;
+};
+
+export const resetPassword = async (dirHandle: FileSystemDirectoryHandle, config: FolderSyncConfig): Promise<void> => {
+    let db = await readDb(dirHandle, config);
+    db.password = "2888";
+    await writeDb(dirHandle, config, db);
+};
+
+export const getLogSessions = async (dirHandle: FileSystemDirectoryHandle, config: FolderSyncConfig): Promise<LogSession[]> => {
+    const db = await readDb(dirHandle, config);
+    const logs = db.logs;
+    const sessions: LogSession[] = [];
+    
+    // Process logs chronologically (oldest to newest) to build sessions
+    // Sort just in case
+    const sortedLogs = [...logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    const activeSessions: { [userName: string]: LogSession } = {};
+
+    sortedLogs.forEach(log => {
+        if (log.action === 'CONNECT') {
+            // Start a new session
+            const session: LogSession = {
+                userName: log.userName,
+                startTime: log.timestamp,
+                endTime: null,
+                status: '접속 중'
+            };
+            // If user already has an active session (shouldn't happen with locking, but safely handle it), mark old as abnormal
+            if (activeSessions[log.userName]) {
+                 activeSessions[log.userName].status = '비정상 종료';
+                 sessions.push(activeSessions[log.userName]);
+            }
+            activeSessions[log.userName] = session;
+        } else if (log.action === 'DISCONNECT_SAVE' || log.action === 'FORCE_UNLOCK') {
+            const session = activeSessions[log.userName];
+            if (session) {
+                session.endTime = log.timestamp;
+                session.status = log.action === 'DISCONNECT_SAVE' ? '정상 종료' : '강제 종료';
+                sessions.push(session);
+                delete activeSessions[log.userName];
+            } else {
+                // Orphaned exit log? Just ignore or log as event
+            }
+        }
+    });
+
+    // Add remaining active sessions
+    Object.values(activeSessions).forEach(session => {
+        // Check if this session corresponds to the ACTUAL db lock
+        // If the DB is unlocked but we have a session here, it means they crashed or exited without saving
+        // However, for simplified view, we just leave it as is or check db.lock
+        if (db.lock.status === 'LOCKED' && db.lock.activeUser === session.userName) {
+            session.status = '접속 중';
+        } else {
+            // Should have been closed but wasn't logged
+             session.status = '비정상 종료'; 
+        }
+        sessions.push(session);
+    });
+
+    // Return reversed (newest first)
+    return sessions.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+};
+
 
 // --- Import / Export Logic ---
 
@@ -228,7 +348,6 @@ export const importExcelData = async (file: File): Promise<LedgerEntry[]> => {
     });
 };
 
-// Existing export (just Excel/basic zip) - renamed slightly to avoid conflict if needed, but keeping for compatibility
 export const exportDataToZip = (data: LedgerEntry[]) => {
     const worksheet = getXLSX().utils.json_to_sheet(data.map(({fileData, ...rest}) => rest));
     const workbook = getXLSX().utils.book_new();
@@ -236,7 +355,6 @@ export const exportDataToZip = (data: LedgerEntry[]) => {
     getXLSX().writeFile(workbook, "직인관리대장.xlsx");
 };
 
-// NEW: Full Backup Function
 export const backupFullDataToZip = async (data: LedgerEntry[]) => {
     const zip = new JSZip();
     

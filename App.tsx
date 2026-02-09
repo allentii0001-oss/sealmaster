@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Book, Printer, UserCircle } from 'lucide-react';
+import { Book, Printer, UserCircle, History } from 'lucide-react';
 import LedgerManagement from './components/LedgerManagement';
 import LedgerPrint from './components/LedgerPrint';
+import LogViewer from './components/LogViewer';
 import { LedgerEntry, Tab, FolderSyncConfig, DEFAULT_SYNC_CONFIG } from './types';
 
 const App: React.FC = () => {
@@ -21,6 +22,9 @@ const App: React.FC = () => {
   // Folder Sync State
   const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [syncConfig, setSyncConfig] = useState<FolderSyncConfig>(DEFAULT_SYNC_CONFIG);
+
+  // Log Viewer Modal State
+  const [isLogViewerOpen, setIsLogViewerOpen] = useState(false);
 
   // Save to localStorage whenever data changes
   useEffect(() => {
@@ -58,7 +62,7 @@ const App: React.FC = () => {
                  required
                />
                <button 
-                 type="submit"
+                 type="submit" 
                  disabled={!tempName.trim()}
                  className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
                >
@@ -69,15 +73,40 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Log Viewer Modal */}
+      {dirHandle && (
+        <LogViewer 
+          isOpen={isLogViewerOpen} 
+          onClose={() => setIsLogViewerOpen(false)} 
+          dirHandle={dirHandle}
+          syncConfig={syncConfig}
+        />
+      )}
+
       {/* Header / Navigation */}
       <header className="bg-slate-900 text-white shadow-lg no-print">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center h-16 justify-between">
             <div className="flex items-center gap-3">
               <Book className="text-blue-400" />
-              <h1 className="text-xl font-bold tracking-tight">직인 관리 시스템</h1>
+              <div className="flex items-baseline gap-1.5">
+                <h1 className="text-xl font-bold tracking-tight">직인 관리 시스템</h1>
+                <span className="text-xs text-slate-400 font-medium">v_1.0</span>
+              </div>
             </div>
             <div className="flex items-center gap-4">
+               {/* Log Button - Only visible if folder connected */}
+               {dirHandle && (
+                   <button 
+                      onClick={() => setIsLogViewerOpen(true)}
+                      className="hidden md:flex items-center gap-1 text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-3 py-1 rounded-full transition-colors border border-slate-700"
+                      title="접속 기록 관리자 메뉴"
+                   >
+                       <History size={14} />
+                       <span>접속 기록 확인</span>
+                   </button>
+               )}
+
                {userName && (
                  <div className="hidden md:flex items-center gap-2 text-sm text-slate-300 bg-slate-800 px-3 py-1 rounded-full">
                     <UserCircle size={14} />

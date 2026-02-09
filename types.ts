@@ -54,13 +54,23 @@ export interface LogEntry {
 
 // The single file structure
 export interface CombinedDatabase {
+  password?: string; // App Password (default "2888")
   lock: LockState;
   logs: LogEntry[];
   entries: Omit<LedgerEntry, 'fileData'>[]; // Metadata only in JSON to keep it small
 }
 
 export const INITIAL_DB: CombinedDatabase = {
+  password: "2888",
   lock: { status: 'UNLOCKED', activeUser: null, startTime: null },
   logs: [],
   entries: [],
 };
+
+// Log Session View Type
+export interface LogSession {
+  userName: string;
+  startTime: string;
+  endTime: string | null;
+  status: '접속 중' | '정상 종료' | '강제 종료' | '비정상 종료';
+}
