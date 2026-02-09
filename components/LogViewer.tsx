@@ -144,7 +144,7 @@ const LogViewer: React.FC<Props> = ({ isOpen, onClose, dirHandle, syncConfig }) 
                             onClick={handleResetPassword}
                             className="text-sm text-red-500 hover:underline flex items-center justify-center gap-1"
                         >
-                            <RefreshCw size={14} /> 비밀번호 초기화 (2888)
+                            <RefreshCw size={14} /> 비밀번호 초기화
                         </button>
                     </div>
                 </div>
