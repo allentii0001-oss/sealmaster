@@ -13,11 +13,8 @@ const App: React.FC = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(true);
   const [tempName, setTempName] = useState('');
 
-  // Load initial data from localStorage if available, else empty
-  const [data, setData] = useState<LedgerEntry[]>(() => {
-    const saved = localStorage.getItem('sealLedgerData');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Load initial data empty (No LocalStorage)
+  const [data, setData] = useState<LedgerEntry[]>([]);
 
   // Folder Sync State
   const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
@@ -26,10 +23,7 @@ const App: React.FC = () => {
   // Log Viewer Modal State
   const [isLogViewerOpen, setIsLogViewerOpen] = useState(false);
 
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem('sealLedgerData', JSON.stringify(data));
-  }, [data]);
+  // Note: Removed useEffect that saves to localStorage to prevent data persistence across reloads without file sync.
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();

@@ -20,6 +20,7 @@ export interface SearchCriteria {
   date: boolean;
   docNum: boolean;
   content: boolean;
+  recipient: boolean;
   author: boolean;
 }
 

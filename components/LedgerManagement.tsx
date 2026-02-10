@@ -39,6 +39,7 @@ const LedgerManagement: React.FC<Props> = ({
     date: false,
     docNum: false,
     content: true, // Default
+    recipient: false,
     author: false,
   });
   const [isEditMode, setIsEditMode] = useState(false);
@@ -56,6 +57,16 @@ const LedgerManagement: React.FC<Props> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
+  // --- Helper: Sort by Date and Renumber IDs ---
+  const sortAndRenumber = (entries: LedgerEntry[]): LedgerEntry[] => {
+    return entries
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((entry, index) => ({
+        ...entry,
+        id: index + 1
+      }));
+  };
+
   // --- Handlers: Folder Sync (Connect & Lock) ---
 
   const handleConnectFolder = async () => {
@@ -72,7 +83,8 @@ const LedgerManagement: React.FC<Props> = ({
         try {
             const entries = await connectAndLock(handle, syncConfig, userName);
             setDirHandle(handle);
-            setData(entries);
+            // Ensure loaded data is sorted and numbered correctly
+            setData(sortAndRenumber(entries));
             setImportStatus({ type: 'success', message: `연결 성공: ${handle.name} (편집 가능)` });
         } catch (err: any) {
             if (err instanceof LockedError) {
@@ -104,7 +116,7 @@ const LedgerManagement: React.FC<Props> = ({
           const entries = await connectAndLock(lockedError.handle, syncConfig, userName);
           
           setDirHandle(lockedError.handle);
-          setData(entries);
+          setData(sortAndRenumber(entries));
           setImportStatus({ type: 'success', message: `강제 종료 후 연결 성공` });
           setLockedError(null); // Close modal
       } catch (error: any) {
@@ -171,12 +183,14 @@ const LedgerManagement: React.FC<Props> = ({
       return;
     }
 
+    // Temporary ID, will be recalculated
     const newEntry: LedgerEntry = {
       ...formData,
-      id: data.length > 0 ? Math.max(...data.map(d => d.id)) + 1 : 1,
+      id: 0,
     };
 
-    setData((prev) => [...prev, newEntry]);
+    // Add, Sort, Renumber
+    setData((prev) => sortAndRenumber([...prev, newEntry]));
     
     // Reset form
     setFormData({
@@ -214,7 +228,8 @@ const LedgerManagement: React.FC<Props> = ({
   };
   
   const confirmImport = () => {
-      setData(pendingData);
+      // Sort and renumber imported data as well
+      setData(sortAndRenumber(pendingData));
       setImportStatus({ type: 'success', message: `총 ${pendingData.length}건을 성공적으로 불러왔습니다.` });
       setShowImportModal(false);
       setPendingData([]);
@@ -243,9 +258,15 @@ const LedgerManagement: React.FC<Props> = ({
   };
 
   const handleCellEdit = (id: number, field: keyof LedgerEntry, value: string) => {
-    setData((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-    );
+    setData((prev) => {
+      const updatedList = prev.map((item) => (item.id === id ? { ...item, [field]: value } : item));
+      
+      // If date changes, we must re-sort and re-number
+      if (field === 'date') {
+        return sortAndRenumber(updatedList);
+      }
+      return updatedList;
+    });
   };
 
   const handleRowFileUpload = async (id: number, e: ChangeEvent<HTMLInputElement>) => {
@@ -270,10 +291,8 @@ const LedgerManagement: React.FC<Props> = ({
     if (window.confirm('정말 이 항목을 삭제하시겠습니까?\n삭제 후 연번은 자동으로 재정렬됩니다.')) {
       setData((prev) => {
         const filtered = prev.filter((item) => item.id !== idToDelete);
-        return filtered.map((item, index) => ({
-          ...item,
-          id: index + 1
-        }));
+        // Renumber after delete (Sort should be maintained, but re-run just in case)
+        return sortAndRenumber(filtered);
       });
     }
   };
@@ -297,9 +316,10 @@ const LedgerManagement: React.FC<Props> = ({
     if (searchCriteria.date) matches.push(item.date.includes(query));
     if (searchCriteria.docNum) matches.push(item.docNum.toLowerCase().includes(query));
     if (searchCriteria.content) matches.push(item.content.toLowerCase().includes(query));
+    if (searchCriteria.recipient) matches.push(item.recipient.toLowerCase().includes(query));
     if (searchCriteria.author) matches.push(item.author.toLowerCase().includes(query));
 
-    if (!searchCriteria.date && !searchCriteria.docNum && !searchCriteria.content && !searchCriteria.author) {
+    if (!searchCriteria.date && !searchCriteria.docNum && !searchCriteria.content && !searchCriteria.recipient && !searchCriteria.author) {
         return false;
     }
     
@@ -307,7 +327,7 @@ const LedgerManagement: React.FC<Props> = ({
     return matches.some(m => m);
   });
 
-  const sortedData = [...filteredData].sort((a, b) => a.id - b.id);
+  const sortedData = [...filteredData]; // Already sorted by ID/Date thanks to sortAndRenumber
 
   return (
     <div className="space-y-6 relative">
@@ -566,6 +586,15 @@ const LedgerManagement: React.FC<Props> = ({
                 className="rounded text-blue-600"
               />
               내용
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={searchCriteria.recipient}
+                onChange={(e) => setSearchCriteria(p => ({ ...p, recipient: e.target.checked }))}
+                className="rounded text-blue-600"
+              />
+              수신처
             </label>
             <label className="flex items-center gap-1 cursor-pointer">
               <input
