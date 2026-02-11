@@ -637,6 +637,7 @@ const LedgerManagement: React.FC<Props> = ({
               name="date"
               value={formData.date}
               onChange={handleInputChange}
+              max="9999-12-31"
               className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
               required
             />
@@ -770,6 +771,7 @@ const LedgerManagement: React.FC<Props> = ({
                         type="date" 
                         value={item.date} 
                         onChange={(e) => handleCellEdit(item.id, 'date', e.target.value)}
+                        max="9999-12-31"
                         className="w-full border p-1 rounded"
                         aria-label={`연번 ${item.id}번 일자 수정`}
                       />
