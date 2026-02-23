@@ -1,5 +1,5 @@
 import React, { useState, useRef, ChangeEvent } from 'react';
-import { Upload, FileText, Search, Save, Download, Edit2, Check, X, FileSpreadsheet, AlertCircle, CheckCircle2, Trash2, RefreshCw, FolderOpen, Settings, FolderInput, FolderOutput, Lock, Unlock, Archive } from 'lucide-react';
+import { Upload, FileText, Search, Save, Download, Edit2, Check, X, FileSpreadsheet, AlertCircle, CheckCircle2, Trash2, RefreshCw, FolderOpen, FolderInput, FolderOutput, Lock, Unlock, Archive } from 'lucide-react';
 import { LedgerEntry, SearchCriteria, FolderSyncConfig, LockState } from '../types';
 import { fileToBase64, exportDataToZip, backupFullDataToZip, importExcelData, connectToDirectory, connectAndLock, saveAndUnlock, forceUnlock, LockedError } from '../services/fileService';
 
@@ -47,7 +47,6 @@ const LedgerManagement: React.FC<Props> = ({
   const [isLoading, setIsLoading] = useState(false);
 
   // Modals
-  const [showConfigModal, setShowConfigModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [pendingData, setPendingData] = useState<LedgerEntry[]>([]);
 
@@ -78,6 +77,14 @@ const LedgerManagement: React.FC<Props> = ({
     try {
         const handle = await connectToDirectory();
         
+        // Check if DB file exists
+        try {
+            await handle.getFileHandle(syncConfig.dbFileName);
+        } catch (e) {
+            alert(`'${syncConfig.dbFileName}' 파일이 없어 폴더를 연결할 수 없습니다.`);
+            return;
+        }
+
         // Attempt to Lock and Load
         setIsLoading(true);
         try {
@@ -379,59 +386,6 @@ const LedgerManagement: React.FC<Props> = ({
           </div>
       )}
 
-      {/* Configuration Modal */}
-      {showConfigModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-              <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-                  <div className="flex items-center gap-3 mb-6 border-b pb-4">
-                      <Settings className="text-gray-700" size={24} aria-hidden="true" />
-                      <h3 id="modal-title" className="text-xl font-bold">동기화 파일 설정</h3>
-                  </div>
-                  
-                  <div className="space-y-4 mb-6">
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">DB 파일명 (JSON)</label>
-                          <input 
-                              type="text" 
-                              value={syncConfig.dbFileName}
-                              onChange={(e) => setSyncConfig(p => ({ ...p, dbFileName: e.target.value }))}
-                              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
-                              readOnly
-                          />
-                          <p className="text-xs text-gray-500 mt-1">데이터와 로그가 통합된 파일입니다.</p>
-                      </div>
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">백업 엑셀 파일명</label>
-                          <input 
-                              type="text" 
-                              value={syncConfig.backupExcelName}
-                              onChange={(e) => setSyncConfig(p => ({ ...p, backupExcelName: e.target.value }))}
-                              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                          />
-                      </div>
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">첨부파일 폴더명</label>
-                          <input 
-                              type="text" 
-                              value={syncConfig.folderName}
-                              onChange={(e) => setSyncConfig(p => ({ ...p, folderName: e.target.value }))}
-                              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                          />
-                      </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3">
-                      <button 
-                          onClick={() => setShowConfigModal(false)}
-                          className="px-4 py-2 bg-slate-800 text-white rounded hover:bg-slate-900 transition-colors"
-                      >
-                          닫기
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-
       {/* Import Confirmation Modal */}
       {showImportModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="import-title">
@@ -484,13 +438,6 @@ const LedgerManagement: React.FC<Props> = ({
                    <div className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded border border-green-200">
                        <CheckCircle2 size={16} className="text-green-600" aria-hidden="true"/>
                        <span className="text-sm font-bold text-green-900 truncate max-w-[150px]">연결됨: {dirHandle.name}</span>
-                       <button 
-                           onClick={() => setShowConfigModal(true)}
-                           className="p-1 hover:bg-green-200 rounded text-green-700 ml-1"
-                           title="설정"
-                       >
-                           <Settings size={16} />
-                       </button>
                    </div>
                )}
 

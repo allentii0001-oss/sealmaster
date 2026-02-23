@@ -31,7 +31,7 @@ export interface FolderSyncConfig {
 }
 
 export const DEFAULT_SYNC_CONFIG: FolderSyncConfig = {
-  dbFileName: '직인 관리 대장.json',
+  dbFileName: '직인관리대장.json',
   folderName: '직인문서스캔본',
   backupExcelName: '직인관리대장_백업.xlsx',
 };

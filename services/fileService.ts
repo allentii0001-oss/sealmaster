@@ -360,7 +360,7 @@ export const backupFullDataToZip = async (data: LedgerEntry[]) => {
     
     // 1. Add Metadata JSON
     const metaData = data.map(({fileData, ...rest}) => rest);
-    zip.file("직인 관리 대장.json", JSON.stringify(metaData, null, 2));
+    zip.file("직인관리대장.json", JSON.stringify(metaData, null, 2));
 
     // 2. Add Excel Backup
     const worksheet = getXLSX().utils.json_to_sheet(metaData);
